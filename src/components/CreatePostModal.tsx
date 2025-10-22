@@ -2,23 +2,103 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Sparkles, Coins, Image, Video } from "lucide-react";
+import { Sparkles, Coins, Image, Video, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-const CreatePostModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+interface CreatePostModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onPostCreated?: () => void;
+}
+
+const CreatePostModal = ({ isOpen, onClose, onPostCreated }: CreatePostModalProps) => {
+  const { user } = useAuth();
   const [postType, setPostType] = useState<"text" | "ai">("text");
   const [content, setContent] = useState("");
   const [prompt, setPrompt] = useState("");
   const [mediaType, setMediaType] = useState<"image" | "video">("image");
+  const [isCreating, setIsCreating] = useState(false);
 
   const tokenCost = mediaType === "image" ? 100 : 500;
 
-  const handleCreate = () => {
-    // TODO: Implement post creation logic
-    console.log({ postType, content, prompt, mediaType });
-    onClose();
+  const handleCreate = async () => {
+    if (!user) {
+      toast.error("Please sign in to create posts");
+      return;
+    }
+
+    if (postType === "ai" && !prompt.trim()) {
+      toast.error("Please enter a prompt for AI generation");
+      return;
+    }
+
+    if (postType === "text" && !content.trim()) {
+      toast.error("Please enter some content");
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      if (postType === "text") {
+        // Create text post directly
+        const { error } = await supabase
+          .from('posts')
+          .insert({
+            user_id: user.id,
+            content: content,
+            is_ai_generated: false,
+            token_cost: 0,
+          });
+
+        if (error) throw error;
+        
+        toast.success("Post created successfully!");
+        setContent("");
+        onPostCreated?.();
+      } else {
+        // Call edge function for AI generation
+        const { data, error } = await supabase.functions.invoke('generate-ai-content', {
+          body: {
+            prompt: prompt,
+            mediaType: mediaType,
+            content: content || `Generated with AI: "${prompt}"`
+          }
+        });
+
+        if (error) {
+          console.error('Edge function error:', error);
+          if (error.message.includes('402')) {
+            toast.error("Insufficient tokens. Please purchase more tokens.");
+          } else {
+            throw error;
+          }
+          return;
+        }
+
+        if (data.error) {
+          if (data.error.includes('Insufficient tokens')) {
+            toast.error(`Insufficient tokens. You need ${data.required} tokens but only have ${data.balance}.`);
+          } else {
+            toast.error(data.error);
+          }
+          return;
+        }
+
+        toast.success(`🎉 AI content generated! ${data.tokensSpent} tokens spent. ${data.remainingTokens} remaining.`);
+        setContent("");
+        setPrompt("");
+        onPostCreated?.();
+      }
+    } catch (error) {
+      console.error('Error creating post:', error);
+      toast.error("Failed to create post");
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -42,10 +122,8 @@ const CreatePostModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
           {/* Text Post */}
           <TabsContent value="text" className="space-y-4">
             <div>
-              <Label htmlFor="content">What's on your mind?</Label>
               <Textarea
-                id="content"
-                placeholder="Share your thoughts..."
+                placeholder="What's on your mind?"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 className="min-h-32 mt-2 bg-background"
@@ -54,8 +132,19 @@ const CreatePostModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
 
             <div className="flex items-center justify-between pt-4 border-t border-border">
               <p className="text-sm text-muted-foreground">Free to post</p>
-              <Button onClick={handleCreate} className="gradient-primary text-primary-foreground">
-                Post
+              <Button 
+                onClick={handleCreate} 
+                disabled={isCreating || !content.trim()}
+                className="gradient-primary text-primary-foreground"
+              >
+                {isCreating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Posting...
+                  </>
+                ) : (
+                  "Post"
+                )}
               </Button>
             </div>
           </TabsContent>
@@ -63,10 +152,8 @@ const CreatePostModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
           {/* AI-Enhanced Post */}
           <TabsContent value="ai" className="space-y-4">
             <div>
-              <Label htmlFor="ai-content">Caption (optional)</Label>
               <Textarea
-                id="ai-content"
-                placeholder="Add a caption for your AI creation..."
+                placeholder="Add a caption for your AI creation... (optional)"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 className="min-h-24 mt-2 bg-background"
@@ -74,9 +161,7 @@ const CreatePostModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
             </div>
 
             <div>
-              <Label htmlFor="prompt">AI Prompt</Label>
               <Textarea
-                id="prompt"
                 placeholder="Describe what you want to create... (e.g., 'A magical forest with glowing mushrooms at sunset')"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -85,7 +170,6 @@ const CreatePostModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
             </div>
 
             <div>
-              <Label>Media Type</Label>
               <div className="grid grid-cols-2 gap-3 mt-2">
                 <Button
                   variant={mediaType === "image" ? "default" : "outline"}
@@ -99,9 +183,11 @@ const CreatePostModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
                   variant={mediaType === "video" ? "default" : "outline"}
                   onClick={() => setMediaType("video")}
                   className={mediaType === "video" ? "gradient-primary text-primary-foreground" : ""}
+                  disabled
+                  title="Video generation coming soon"
                 >
                   <Video className="w-4 h-4 mr-2" />
-                  Video
+                  Video (Soon)
                 </Button>
               </div>
             </div>
@@ -114,10 +200,19 @@ const CreatePostModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
               <Button 
                 onClick={handleCreate} 
                 className="gradient-primary text-primary-foreground"
-                disabled={!prompt}
+                disabled={!prompt.trim() || isCreating}
               >
-                <Sparkles className="w-4 h-4 mr-2" />
-                Generate & Post
+                {isCreating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Generate & Post
+                  </>
+                )}
               </Button>
             </div>
           </TabsContent>

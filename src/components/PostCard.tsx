@@ -1,31 +1,98 @@
 import { Button } from "@/components/ui/button";
 import { Heart, MessageCircle, Share2, Sparkles, Coins } from "lucide-react";
 import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 
-interface Post {
-  id: string;
-  user: {
-    name: string;
-    username: string;
-    avatar: string;
+interface PostCardProps {
+  post: {
+    id: string;
+    user_id: string;
+    content: string;
+    prompt?: string;
+    media_url?: string;
+    media_type?: string;
+    token_cost: number;
+    is_ai_generated: boolean;
+    like_count: number;
+    comment_count: number;
+    created_at: string;
+    profiles: {
+      display_name: string;
+      avatar_url?: string;
+    };
   };
-  content: string;
-  image?: string;
-  prompt?: string;
-  timestamp: string;
-  likes: number;
-  comments: number;
-  tokenCost: number;
-  isAiGenerated: boolean;
+  onUpdate?: () => void;
 }
 
-const PostCard = ({ post }: { post: Post }) => {
-  const [isLiked, setIsLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(post.likes);
+const PostCard = ({ post, onUpdate }: PostCardProps) => {
+  const { user } = useAuth();
+  const [isLiking, setIsLiking] = useState(false);
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    setLikeCount(isLiked ? likeCount - 1 : likeCount + 1);
+  // Check if current user has liked this post
+  const { data: userLike, refetch: refetchLike } = useQuery({
+    queryKey: ['like', post.id, user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase
+        .from('likes')
+        .select('*')
+        .eq('post_id', post.id)
+        .eq('user_id', user.id)
+        .single();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const isLiked = !!userLike;
+
+  const handleLike = async () => {
+    if (!user) {
+      toast.error("Please sign in to like posts");
+      return;
+    }
+
+    setIsLiking(true);
+
+    if (isLiked) {
+      // Unlike
+      const { error } = await supabase
+        .from('likes')
+        .delete()
+        .eq('post_id', post.id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        toast.error("Failed to unlike post");
+      }
+    } else {
+      // Like
+      const { error } = await supabase
+        .from('likes')
+        .insert({ post_id: post.id, user_id: user.id });
+
+      if (error) {
+        toast.error("Failed to like post");
+      }
+    }
+
+    setIsLiking(false);
+    refetchLike();
+    onUpdate?.();
+  };
+
+  const timeAgo = (date: string) => {
+    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
   };
 
   return (
@@ -33,18 +100,16 @@ const PostCard = ({ post }: { post: Post }) => {
       {/* Post Header */}
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img
-            src={post.user.avatar}
-            alt={post.user.name}
-            className="w-12 h-12 rounded-full border-2 border-primary/30"
-          />
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground font-bold">
+            {post.profiles.display_name?.[0]?.toUpperCase() || 'U'}
+          </div>
           <div>
-            <div className="font-semibold text-foreground">{post.user.name}</div>
-            <div className="text-sm text-muted-foreground">{post.user.username} · {post.timestamp}</div>
+            <div className="font-semibold text-foreground">{post.profiles.display_name || 'Anonymous'}</div>
+            <div className="text-sm text-muted-foreground">{timeAgo(post.created_at)}</div>
           </div>
         </div>
 
-        {post.isAiGenerated && (
+        {post.is_ai_generated && (
           <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 border border-primary/30">
             <Sparkles className="w-4 h-4 text-primary" />
             <span className="text-xs font-semibold text-primary">AI</span>
@@ -58,17 +123,17 @@ const PostCard = ({ post }: { post: Post }) => {
       </div>
 
       {/* Post Image */}
-      {post.image && (
+      {post.media_url && (
         <div className="relative">
           <img
-            src={post.image}
+            src={post.media_url}
             alt="Post content"
             className="w-full aspect-video object-cover"
           />
-          {post.isAiGenerated && post.tokenCost > 0 && (
+          {post.is_ai_generated && post.token_cost > 0 && (
             <div className="absolute top-3 right-3 flex items-center gap-1 px-3 py-1 rounded-full bg-background/80 backdrop-blur-sm border border-primary/30">
               <Coins className="w-4 h-4 text-primary" />
-              <span className="text-sm font-bold text-primary">{post.tokenCost}</span>
+              <span className="text-sm font-bold text-primary">{post.token_cost}</span>
             </div>
           )}
         </div>
@@ -91,15 +156,16 @@ const PostCard = ({ post }: { post: Post }) => {
             variant="ghost"
             size="sm"
             onClick={handleLike}
+            disabled={isLiking}
             className={`gap-2 ${isLiked ? 'text-accent' : 'text-muted-foreground'} hover:text-accent transition-colors`}
           >
             <Heart className={`w-5 h-5 ${isLiked ? 'fill-accent' : ''}`} />
-            <span className="font-semibold">{likeCount}</span>
+            <span className="font-semibold">{post.like_count}</span>
           </Button>
 
           <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-primary">
             <MessageCircle className="w-5 h-5" />
-            <span className="font-semibold">{post.comments}</span>
+            <span className="font-semibold">{post.comment_count}</span>
           </Button>
         </div>
 

@@ -3,8 +3,17 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import CreatePostModal from "./CreatePostModal";
 
-const CreatePostButton = () => {
+interface CreatePostButtonProps {
+  onPostCreated?: () => void;
+}
+
+const CreatePostButton = ({ onPostCreated }: CreatePostButtonProps) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handlePostCreated = () => {
+    setIsModalOpen(false);
+    onPostCreated?.();
+  };
 
   return (
     <>
@@ -17,7 +26,8 @@ const CreatePostButton = () => {
 
       <CreatePostModal 
         isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+        onClose={() => setIsModalOpen(false)}
+        onPostCreated={handlePostCreated}
       />
     </>
   );

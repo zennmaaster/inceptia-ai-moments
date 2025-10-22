@@ -17,7 +17,7 @@ const Index = () => {
             {/* Logo/Brand */}
             <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-card/50 backdrop-blur-sm border border-primary/30">
               <Sparkles className="w-5 h-5 text-primary" />
-              <span className="text-sm font-semibold text-primary">Welcome to Inceptia</span>
+              <span className="text-sm font-semibold text-primary">Welcome to Mmmaya</span>
             </div>
 
             {/* Hero Headline */}
@@ -69,8 +69,8 @@ const Index = () => {
 
       {/* Features Section */}
       <div className="container mx-auto px-4 py-20">
-        <div className="text-center mb-16 animate-fade-in">
-          <h2 className="text-4xl font-bold mb-4">Why Creators Love Inceptia</h2>
+          <div className="text-center mb-16 animate-fade-in">
+          <h2 className="text-4xl font-bold mb-4">Why Creators Love Mmmaya</h2>
           <p className="text-xl text-muted-foreground">Everything you need to create, share, and monetize your AI-enhanced content</p>
         </div>
 

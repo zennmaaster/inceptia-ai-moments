@@ -3,21 +3,70 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sparkles } from "lucide-react";
-import { Link } from "react-router-dom";
-import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { user, signIn, signUp, signInWithGoogle } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSignIn = () => {
-    console.log("Sign in:", email, password);
-    // TODO: Implement authentication
+  useEffect(() => {
+    if (user) {
+      navigate("/feed");
+    }
+  }, [user, navigate]);
+
+  const handleSignIn = async () => {
+    if (!email || !password) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+    setLoading(true);
+    const { error } = await signIn(email, password);
+    setLoading(false);
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Signed in successfully!");
+      navigate("/feed");
+    }
   };
 
-  const handleSignUp = () => {
-    console.log("Sign up:", email, password);
-    // TODO: Implement authentication
+  const handleSignUp = async () => {
+    if (!email || !password) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    setLoading(true);
+    const { error } = await signUp(email, password);
+    setLoading(false);
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Account created! Welcome to Mmmaya!");
+      navigate("/feed");
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    const { error } = await signInWithGoogle();
+    setLoading(false);
+    
+    if (error) {
+      toast.error(error.message);
+    }
   };
 
   return (
@@ -36,7 +85,7 @@ const Auth = () => {
                 <Sparkles className="w-6 h-6 text-primary-foreground" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Inceptia
+                Mmmaya
               </span>
             </Link>
             <p className="text-muted-foreground">Join the AI creative revolution</p>
@@ -63,6 +112,7 @@ const Auth = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="mt-2 bg-background"
+                  onKeyDown={(e) => e.key === 'Enter' && handleSignIn()}
                 />
               </div>
 
@@ -75,11 +125,12 @@ const Auth = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="mt-2 bg-background"
+                  onKeyDown={(e) => e.key === 'Enter' && handleSignIn()}
                 />
               </div>
 
-              <Button onClick={handleSignIn} className="w-full gradient-primary text-primary-foreground mt-6">
-                Sign In
+              <Button onClick={handleSignIn} disabled={loading} className="w-full gradient-primary text-primary-foreground mt-6">
+                {loading ? "Signing in..." : "Sign In"}
               </Button>
 
               <div className="relative my-6">
@@ -91,7 +142,7 @@ const Auth = () => {
                 </div>
               </div>
 
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" onClick={handleGoogleSignIn} disabled={loading} className="w-full">
                 <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                   <path
                     fill="currentColor"
@@ -137,6 +188,7 @@ const Auth = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="mt-2 bg-background"
+                  onKeyDown={(e) => e.key === 'Enter' && handleSignUp()}
                 />
               </div>
 
@@ -148,8 +200,8 @@ const Auth = () => {
                 <p className="text-muted-foreground">Get 100 free tokens when you sign up!</p>
               </div>
 
-              <Button onClick={handleSignUp} className="w-full gradient-primary text-primary-foreground mt-6">
-                Create Account
+              <Button onClick={handleSignUp} disabled={loading} className="w-full gradient-primary text-primary-foreground mt-6">
+                {loading ? "Creating account..." : "Create Account"}
               </Button>
 
               <div className="relative my-6">
@@ -161,7 +213,7 @@ const Auth = () => {
                 </div>
               </div>
 
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" onClick={handleGoogleSignIn} disabled={loading} className="w-full">
                 <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                   <path
                     fill="currentColor"
