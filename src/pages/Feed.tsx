@@ -21,7 +21,7 @@ const Feed = () => {
   }, [user, authLoading, navigate]);
 
   const { data: posts, isLoading, refetch } = useQuery({
-    queryKey: ['posts', activeTab],
+    queryKey: ['posts', activeTab, user?.id],
     queryFn: async () => {
       let query = supabase
         .from('posts')
@@ -31,12 +31,31 @@ const Feed = () => {
             display_name,
             avatar_url
           )
-        `)
-        .order('created_at', { ascending: false });
+        `);
 
       // Apply filters based on active tab
       if (activeTab === "trending") {
         query = query.order('like_count', { ascending: false });
+      } else if (activeTab === "following" && user) {
+        // Get posts from users that the current user follows
+        const { data: follows } = await supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', user.id);
+        
+        if (follows && follows.length > 0) {
+          const followingIds = follows.map(f => f.following_id);
+          query = query.in('user_id', followingIds);
+        } else {
+          // Return empty array if not following anyone
+          return [];
+        }
+        query = query.order('created_at', { ascending: false });
+      } else if (activeTab === "recent") {
+        query = query.order('created_at', { ascending: false });
+      } else {
+        // "for-you" - mix of trending and recent
+        query = query.order('created_at', { ascending: false });
       }
 
       const { data, error } = await query.limit(20);

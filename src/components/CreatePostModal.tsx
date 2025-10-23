@@ -2,8 +2,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sparkles, Coins, Image, Video, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { Sparkles, Coins, Image, Video, Loader2, Upload, X } from "lucide-react";
+import { useState, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -21,8 +21,53 @@ const CreatePostModal = ({ isOpen, onClose, onPostCreated }: CreatePostModalProp
   const [prompt, setPrompt] = useState("");
   const [mediaType, setMediaType] = useState<"image" | "video">("image");
   const [isCreating, setIsCreating] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const tokenCost = mediaType === "image" ? 100 : 500;
+  const tokenCost = mediaType === "image" ? 10 : 100;
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error("Please upload an image file");
+      return;
+    }
+
+    // Upload to Supabase Storage
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${user.id}/${Date.now()}.${fileExt}`;
+
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('user-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('user-images')
+        .getPublicUrl(filePath);
+
+      setUploadedImage(file);
+      setUploadedImageUrl(publicUrl);
+      toast.success("Image uploaded successfully!");
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error("Failed to upload image");
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setUploadedImage(null);
+    setUploadedImageUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handleCreate = async () => {
     if (!user) {
@@ -60,12 +105,13 @@ const CreatePostModal = ({ isOpen, onClose, onPostCreated }: CreatePostModalProp
         setContent("");
         onPostCreated?.();
       } else {
-        // Call edge function for AI generation
+        // Call edge function for AI generation or editing
         const { data, error } = await supabase.functions.invoke('generate-ai-content', {
           body: {
             prompt: prompt,
             mediaType: mediaType,
-            content: content || `Generated with AI: "${prompt}"`
+            content: content || `Generated with AI: "${prompt}"`,
+            imageUrl: uploadedImageUrl // Pass the uploaded image URL for editing
           }
         });
 
@@ -88,9 +134,10 @@ const CreatePostModal = ({ isOpen, onClose, onPostCreated }: CreatePostModalProp
           return;
         }
 
-        toast.success(`🎉 AI content generated! ${data.tokensSpent} tokens spent. ${data.remainingTokens} remaining.`);
+        toast.success(`🎉 AI content ${uploadedImageUrl ? 'edited' : 'generated'}! ${data.tokensSpent} tokens spent. ${data.remainingTokens} remaining.`);
         setContent("");
         setPrompt("");
+        handleRemoveImage();
         onPostCreated?.();
       }
     } catch (error) {
@@ -151,6 +198,43 @@ const CreatePostModal = ({ isOpen, onClose, onPostCreated }: CreatePostModalProp
 
           {/* AI-Enhanced Post */}
           <TabsContent value="ai" className="space-y-4">
+            {/* Image Upload Section */}
+            <div className="border-2 border-dashed border-border rounded-lg p-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+              
+              {uploadedImageUrl ? (
+                <div className="relative">
+                  <img src={uploadedImageUrl} alt="Uploaded" className="w-full rounded-lg" />
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-2 right-2"
+                    onClick={handleRemoveImage}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                  <p className="text-sm text-muted-foreground mt-2 text-center">
+                    Upload an image to edit it with AI, or leave blank to generate from scratch
+                  </p>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Image to Edit (Optional)
+                </Button>
+              )}
+            </div>
+
             <div>
               <Textarea
                 placeholder="Add a caption for your AI creation... (optional)"
@@ -162,7 +246,10 @@ const CreatePostModal = ({ isOpen, onClose, onPostCreated }: CreatePostModalProp
 
             <div>
               <Textarea
-                placeholder="Describe what you want to create... (e.g., 'A magical forest with glowing mushrooms at sunset')"
+                placeholder={uploadedImageUrl 
+                  ? "Describe how you want to edit the image... (e.g., 'Make it sunset, add glowing effects')"
+                  : "Describe what you want to create... (e.g., 'A magical forest with glowing mushrooms at sunset')"
+                }
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 className="min-h-24 mt-2 bg-background"

@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, mediaType, content } = await req.json();
+    const { prompt, mediaType, content, imageUrl } = await req.json();
     
     if (!prompt) {
       return new Response(
@@ -54,7 +54,7 @@ serve(async (req) => {
       );
     }
 
-    const tokenCost = mediaType === 'video' ? 500 : 100;
+    const tokenCost = mediaType === 'video' ? 100 : 10;
     
     if (profile.token_balance < tokenCost) {
       return new Response(
@@ -64,7 +64,24 @@ serve(async (req) => {
     }
 
     // Generate AI content using Lovable AI
-    console.log('Generating AI content with prompt:', prompt);
+    console.log('Generating AI content with prompt:', prompt, 'Image URL:', imageUrl);
+    
+    const messages: any[] = imageUrl 
+      ? [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: imageUrl } }
+            ]
+          }
+        ]
+      : [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ];
     
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -74,12 +91,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash-image-preview',
-        messages: [
-          { 
-            role: 'user', 
-            content: prompt 
-          }
-        ],
+        messages,
         modalities: ['image', 'text']
       }),
     });

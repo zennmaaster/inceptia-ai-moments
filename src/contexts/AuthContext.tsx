@@ -26,6 +26,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        
+        // Refresh tokens daily when user logs in or session changes
+        if (session?.user) {
+          setTimeout(() => {
+            refreshDailyTokens(session.user.id);
+          }, 0);
+        }
       }
     );
 
@@ -34,10 +41,41 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      
+      // Refresh tokens daily on initial load
+      if (session?.user) {
+        refreshDailyTokens(session.user.id);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const refreshDailyTokens = async (userId: string) => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('last_token_refresh')
+        .eq('id', userId)
+        .single();
+      
+      if (profile) {
+        const lastRefresh = new Date(profile.last_token_refresh);
+        const now = new Date();
+        const hoursSinceRefresh = (now.getTime() - lastRefresh.getTime()) / (1000 * 60 * 60);
+        
+        // If more than 24 hours since last refresh, call the refresh function
+        if (hoursSinceRefresh >= 24) {
+          const { error } = await supabase.rpc('refresh_daily_tokens');
+          if (error) {
+            console.error('Token refresh error:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Token refresh check error:', error);
+    }
+  };
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
