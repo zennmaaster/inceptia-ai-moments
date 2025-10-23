@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import PostCard from "@/components/PostCard";
+import EditProfileDialog from "@/components/EditProfileDialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
@@ -14,6 +15,7 @@ const Profile = () => {
   const navigate = useNavigate();
   const { userId } = useParams();
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const profileUserId = userId || user?.id;
   const isOwnProfile = user?.id === profileUserId;
@@ -25,7 +27,7 @@ const Profile = () => {
   }, [user, authLoading, navigate]);
 
   // Fetch profile data
-  const { data: profile, isLoading: profileLoading } = useQuery({
+  const { data: profile, isLoading: profileLoading, refetch: refetchProfile } = useQuery({
     queryKey: ['profile', profileUserId],
     queryFn: async () => {
       if (!profileUserId) return null;
@@ -183,7 +185,7 @@ const Profile = () => {
             {/* Action Buttons */}
             <div>
               {isOwnProfile ? (
-                <Button variant="outline">
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
                   <Settings className="w-4 h-4 mr-2" />
                   Edit Profile
                 </Button>
@@ -236,6 +238,16 @@ const Profile = () => {
           )}
         </div>
       </div>
+
+      {/* Edit Profile Dialog */}
+      {profile && (
+        <EditProfileDialog
+          isOpen={isEditDialogOpen}
+          onClose={() => setIsEditDialogOpen(false)}
+          profile={profile}
+          onUpdate={refetchProfile}
+        />
+      )}
     </div>
   );
 };

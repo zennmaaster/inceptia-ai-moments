@@ -57,8 +57,8 @@ const Search = () => {
       
       <div className="container mx-auto px-4 py-6 max-w-2xl">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold mb-2">Similar to: "{searchQuery}"</h1>
-          <p className="text-muted-foreground">Posts with similar prompts</p>
+          <h1 className="text-2xl font-bold mb-2">Similar Posts</h1>
+          <p className="text-muted-foreground">Discover related content</p>
         </div>
 
         {isLoading ? (

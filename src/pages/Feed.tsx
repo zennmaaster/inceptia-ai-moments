@@ -14,11 +14,7 @@ const Feed = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("for-you");
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/auth");
-    }
-  }, [user, authLoading, navigate]);
+  // Remove auth guard - users can view feed without login
 
   const { data: posts, isLoading, refetch } = useQuery({
     queryKey: ['posts', activeTab, user?.id],
@@ -63,10 +59,10 @@ const Feed = () => {
       if (error) throw error;
       return data;
     },
-    enabled: !!user,
+    enabled: true, // Allow fetching posts without authentication
   });
 
-  if (authLoading || !user) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -130,8 +126,8 @@ const Feed = () => {
         )}
       </div>
 
-      {/* Floating Create Button */}
-      <CreatePostButton onPostCreated={refetch} />
+      {/* Floating Create Button - only show if logged in */}
+      {user && <CreatePostButton onPostCreated={refetch} />}
     </div>
   );
 };

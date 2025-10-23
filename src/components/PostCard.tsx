@@ -1,11 +1,12 @@
 import { Button } from "@/components/ui/button";
-import { Heart, MessageCircle, Share2, Sparkles, Coins, UserPlus, UserCheck } from "lucide-react";
+import { Heart, MessageCircle, Share2, Sparkles, Coins, UserPlus, UserCheck, X } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 interface PostCardProps {
   post: {
@@ -33,6 +34,7 @@ const PostCard = ({ post, onUpdate }: PostCardProps) => {
   const navigate = useNavigate();
   const [isLiking, setIsLiking] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isImageEnlarged, setIsImageEnlarged] = useState(false);
 
   // Check if current user has liked this post
   const { data: userLike, refetch: refetchLike } = useQuery({
@@ -151,6 +153,33 @@ const PostCard = ({ post, onUpdate }: PostCardProps) => {
     }
   };
 
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Post by ${post.profiles.display_name}`,
+          text: post.content,
+          url: window.location.href,
+        });
+      } catch (error) {
+        // User cancelled or error occurred
+      }
+    } else {
+      // Fallback: copy link to clipboard
+      navigator.clipboard.writeText(window.location.href);
+      toast.success("Link copied to clipboard!");
+    }
+  };
+
+  const handleReply = () => {
+    if (!user) {
+      toast.error("Please sign in to reply");
+      navigate("/auth");
+      return;
+    }
+    toast.info("Reply feature coming soon!");
+  };
+
   const timeAgo = (date: string) => {
     const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
     if (seconds < 60) return `${seconds}s ago`;
@@ -216,11 +245,11 @@ const PostCard = ({ post, onUpdate }: PostCardProps) => {
 
       {/* Post Image */}
       {post.media_url && (
-        <div className="relative">
+        <div className="relative cursor-pointer" onClick={() => setIsImageEnlarged(true)}>
           <img
             src={post.media_url}
             alt="Post content"
-            className="w-full aspect-video object-cover"
+            className="w-full aspect-video object-cover hover:opacity-90 transition-opacity"
           />
           {post.is_ai_generated && post.token_cost > 0 && (
             <div className="absolute top-3 right-3 flex items-center gap-1 px-3 py-1 rounded-full bg-background/80 backdrop-blur-sm border border-primary/30">
@@ -231,8 +260,8 @@ const PostCard = ({ post, onUpdate }: PostCardProps) => {
         </div>
       )}
 
-      {/* AI Prompt */}
-      {post.prompt && (
+      {/* AI Prompt - only show if there's actual user content/caption */}
+      {post.prompt && post.content && !post.content.startsWith('Generated with AI:') && (
         <div className="px-4 py-3 bg-muted/30 border-t border-border">
           <div className="flex items-start gap-2">
             <Sparkles className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
@@ -255,7 +284,12 @@ const PostCard = ({ post, onUpdate }: PostCardProps) => {
             <span className="font-semibold">{post.like_count}</span>
           </Button>
 
-          <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-primary">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="gap-2 text-muted-foreground hover:text-primary"
+            onClick={handleReply}
+          >
             <MessageCircle className="w-5 h-5" />
             <span className="font-semibold">{post.comment_count}</span>
           </Button>
@@ -272,11 +306,39 @@ const PostCard = ({ post, onUpdate }: PostCardProps) => {
               Similars
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="text-muted-foreground hover:text-primary"
+            onClick={handleShare}
+          >
             <Share2 className="w-5 h-5" />
           </Button>
         </div>
       </div>
+
+      {/* Image Enlarge Dialog */}
+      <Dialog open={isImageEnlarged} onOpenChange={setIsImageEnlarged}>
+        <DialogContent className="max-w-7xl w-full p-0 bg-transparent border-0">
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4 z-50 bg-background/80 hover:bg-background"
+              onClick={() => setIsImageEnlarged(false)}
+            >
+              <X className="w-6 h-6" />
+            </Button>
+            {post.media_url && (
+              <img
+                src={post.media_url}
+                alt="Post content enlarged"
+                className="w-full h-auto max-h-[90vh] object-contain rounded-lg"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
