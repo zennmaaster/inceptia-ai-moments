@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+          id?: string
+        }
+        Relationships: []
+      }
       likes: {
         Row: {
           created_at: string
@@ -113,7 +134,10 @@ export type Database = {
           created_at: string
           display_name: string | null
           email: string | null
+          follower_count: number | null
+          following_count: number | null
           id: string
+          last_token_refresh: string | null
           referral_code: string | null
           referred_by: string | null
           token_balance: number
@@ -126,7 +150,10 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           email?: string | null
+          follower_count?: number | null
+          following_count?: number | null
           id: string
+          last_token_refresh?: string | null
           referral_code?: string | null
           referred_by?: string | null
           token_balance?: number
@@ -139,7 +166,10 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           email?: string | null
+          follower_count?: number | null
+          following_count?: number | null
           id?: string
+          last_token_refresh?: string | null
           referral_code?: string | null
           referred_by?: string | null
           token_balance?: number
@@ -161,10 +191,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      generate_referral_code: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      generate_referral_code: { Args: never; Returns: string }
+      refresh_daily_tokens: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
