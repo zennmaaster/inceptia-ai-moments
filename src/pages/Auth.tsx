@@ -54,7 +54,7 @@ const Auth = () => {
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success("Account created! Welcome to Mmmaya!");
+      toast.success("Account created! Welcome to Vyre!");
       navigate("/feed");
     }
   };
@@ -85,7 +85,7 @@ const Auth = () => {
                 <Sparkles className="w-6 h-6 text-primary-foreground" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Mmmaya
+                Vyre
               </span>
             </Link>
             <p className="text-muted-foreground">Join the AI creative revolution</p>
