@@ -26,19 +26,32 @@ const Profile = () => {
     }
   }, [user, authLoading, navigate]);
 
-  // Fetch profile data
+  // Fetch profile data (excluding email for privacy)
   const { data: profile, isLoading: profileLoading, refetch: refetchProfile } = useQuery({
     queryKey: ['profile', profileUserId],
     queryFn: async () => {
       if (!profileUserId) return null;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', profileUserId)
-        .single();
       
-      if (error) throw error;
-      return data;
+      // If viewing own profile, include all fields; otherwise exclude email
+      if (profileUserId === user?.id) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', profileUserId)
+          .single();
+        
+        if (error) throw error;
+        return data;
+      } else {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url, bio, created_at, updated_at, follower_count, following_count, token_balance, referral_code')
+          .eq('id', profileUserId)
+          .single();
+        
+        if (error) throw error;
+        return data;
+      }
     },
     enabled: !!profileUserId,
   });

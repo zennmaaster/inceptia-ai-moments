@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { z } from "zod";
 
 interface EditProfileDialogProps {
   isOpen: boolean;
@@ -29,6 +30,26 @@ const EditProfileDialog = ({ isOpen, onClose, profile, onUpdate }: EditProfileDi
 
   const handleSave = async () => {
     if (!user) return;
+
+    // Validate inputs
+    try {
+      const profileSchema = z.object({
+        display_name: z.string().trim().min(1, "Display name cannot be empty").max(50, "Display name must be less than 50 characters"),
+        username: z.string().trim().min(3, "Username must be at least 3 characters").max(20, "Username must be less than 20 characters").regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
+        bio: z.string().trim().max(500, "Bio must be less than 500 characters").optional(),
+      });
+      
+      profileSchema.parse({ 
+        display_name: displayName, 
+        username, 
+        bio 
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+        return;
+      }
+    }
 
     setIsUpdating(true);
 

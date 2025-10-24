@@ -7,6 +7,7 @@ import { useState, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { z } from "zod";
 
 interface CreatePostModalProps {
   isOpen: boolean;
@@ -75,14 +76,25 @@ const CreatePostModal = ({ isOpen, onClose, onPostCreated }: CreatePostModalProp
       return;
     }
 
-    if (postType === "ai" && !prompt.trim()) {
-      toast.error("Please enter a prompt for AI generation");
-      return;
-    }
-
-    if (postType === "text" && !content.trim()) {
-      toast.error("Please enter some content");
-      return;
+    // Validate inputs
+    try {
+      if (postType === "ai") {
+        const aiSchema = z.object({
+          prompt: z.string().trim().min(10, "Prompt must be at least 10 characters").max(1000, "Prompt must be less than 1000 characters"),
+          content: z.string().trim().max(5000, "Caption must be less than 5000 characters").optional(),
+        });
+        aiSchema.parse({ prompt, content });
+      } else {
+        const textSchema = z.object({
+          content: z.string().trim().min(1, "Content cannot be empty").max(5000, "Content must be less than 5000 characters"),
+        });
+        textSchema.parse({ content });
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+        return;
+      }
     }
 
     setIsCreating(true);

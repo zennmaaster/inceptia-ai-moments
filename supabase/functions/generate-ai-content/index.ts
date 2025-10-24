@@ -14,9 +14,25 @@ serve(async (req) => {
   try {
     const { prompt, mediaType, content, imageUrl } = await req.json();
     
-    if (!prompt) {
+    // Validate prompt
+    if (!prompt || typeof prompt !== 'string') {
       return new Response(
         JSON.stringify({ error: 'Prompt is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (prompt.length < 10 || prompt.length > 1000) {
+      return new Response(
+        JSON.stringify({ error: 'Prompt must be between 10 and 1000 characters' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate content if provided
+    if (content && content.length > 5000) {
+      return new Response(
+        JSON.stringify({ error: 'Content must be less than 5000 characters' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -39,29 +55,33 @@ serve(async (req) => {
       );
     }
 
-    // Get user profile and check token balance
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('token_balance')
-      .eq('id', user.id)
-      .single();
+    // Atomically deduct tokens before AI generation
+    const tokenCost = mediaType === 'video' ? 100 : 10;
+    
+    const { data: deductionResult, error: deductionError } = await supabase
+      .rpc('deduct_tokens', {
+        p_user_id: user.id,
+        p_amount: tokenCost
+      });
 
-    if (profileError) {
-      console.error('Profile error:', profileError);
+    if (deductionError) {
+      console.error('Token deduction error:', deductionError);
       return new Response(
-        JSON.stringify({ error: 'Failed to fetch profile' }),
+        JSON.stringify({ error: 'Failed to process token deduction' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const tokenCost = mediaType === 'video' ? 100 : 10;
-    
-    if (profile.token_balance < tokenCost) {
+    // Check if deduction was successful
+    if (!deductionResult || deductionResult.length === 0 || !deductionResult[0].success) {
+      const balance = deductionResult?.[0]?.new_balance ?? 0;
       return new Response(
-        JSON.stringify({ error: 'Insufficient tokens', required: tokenCost, balance: profile.token_balance }),
+        JSON.stringify({ error: 'Insufficient tokens', required: tokenCost, balance }),
         { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const newBalance = deductionResult[0].new_balance;
 
     // Generate AI content using Lovable AI
     console.log('Generating AI content with prompt:', prompt, 'Image URL:', imageUrl);
@@ -115,16 +135,6 @@ serve(async (req) => {
       );
     }
 
-    // Deduct tokens from user balance
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ token_balance: profile.token_balance - tokenCost })
-      .eq('id', user.id);
-
-    if (updateError) {
-      console.error('Failed to update token balance:', updateError);
-    }
-
     // Create post with generated content
     const { data: post, error: postError } = await supabase
       .from('posts')
@@ -154,7 +164,7 @@ serve(async (req) => {
         success: true, 
         post,
         tokensSpent: tokenCost,
-        remainingTokens: profile.token_balance - tokenCost
+        remainingTokens: newBalance
       }),
       { 
         status: 200, 
